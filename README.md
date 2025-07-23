@@ -1,8 +1,5 @@
 # dir2txt
 
-[![npm version](https://badge.fury.io/js/dir2txt.svg)](https://badge.fury.io/js/dir2txt)
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
-
 A powerful CLI tool that converts your project's directory structure and file contents into clean, LLM-friendly text format. Perfect for sharing codebases with AI assistants, creating documentation, or analyzing project structures.
 
 ## 🚀 Features
