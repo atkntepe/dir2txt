@@ -1,0 +1,32 @@
+{
+  "name": "dir2txt",
+  "version": "1.0.0",
+  "description": "",
+  "main": "bin/cli.js",
+  "bin": {
+    "dir2txt": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/atkntepe/dir2txt.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/atkntepe/dir2txt/issues"
+  },
+  "homepage": "https://github.com/atkntepe/dir2txt#readme",
+  "dependencies": {
+    "commander": "^14.0.0",
+    "fast-glob": "^3.3.3",
+    "ignore": "^7.0.5"
+  },
+  "devDependencies": {
+    "eslint": "^9.31.0"
+  }
+}
