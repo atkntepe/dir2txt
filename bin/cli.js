@@ -11,14 +11,18 @@
  * Generate with specific options:
  *   dir2txt run --dry                    # Only show file tree, no content
  *   dir2txt run --output project.txt     # Save to file
+ *   dir2txt run --clipboard              # Copy to clipboard
  *   dir2txt run --max-size 512000        # Limit file size to 512KB
  *   dir2txt run --noconfig               # Ignore .dir2txt.json config
  *   dir2txt run --markdown               # Output in markdown format
+ *   dir2txt run --ignore "*.test.js"     # Add extra ignore patterns
  * 
  * Config management:
  *   dir2txt config                       # Create default .dir2txt.json
  *   dir2txt update --add "*.test.js"     # Add ignore pattern
  *   dir2txt update --remove "dist/**"    # Remove ignore pattern
+ *   dir2txt templates --list             # Show project templates
+ *   dir2txt templates --apply node       # Apply Node.js template
  *   dir2txt delete                       # Delete config file
  * 
  * Help and version:
@@ -71,11 +75,13 @@ program
   .description('Generate text from directory structure and files')
   .option('--dry', 'Only show file tree, no file contents')
   .option('--output <file>', 'Output to file instead of stdout')
+  .option('--clipboard', 'Copy output to clipboard')
   .option('--max-size <bytes>', 'Maximum file size in bytes', parseInt)
   .option('--noconfig', 'Ignore .dir2txt.json config file')
   .option('--markdown', 'Output in markdown format')
   .option('--preview <count>', 'Show preview with first N files', parseInt)
   .option('--extensions <ext...>', 'Only include files with these extensions (e.g., .js .ts)')
+  .option('--ignore <patterns...>', 'Additional ignore patterns (e.g., "*.test.js" "temp/**")')
   .option('--max-depth <depth>', 'Maximum directory depth to traverse', parseInt)
   .action(async (options) => {
     try {
@@ -98,6 +104,12 @@ program
         excludeLarge: true
       };
       
+      // Add command-line ignore patterns if provided
+      if (options.ignore && options.ignore.length > 0) {
+        const baseIgnores = config.ignorePatterns || [];
+        traverseOptions.ignorePatterns = [...baseIgnores, ...options.ignore];
+      }
+      
       // Get list of files
       console.log('📁 Scanning directory...');
       const files = await getFiles(traverseOptions);
@@ -113,6 +125,7 @@ program
       const generateOptions = {
         dry: options.dry,
         outputFile: options.output,
+        clipboard: options.clipboard,
         markdown: options.markdown,
         concurrency: 10
       };
@@ -282,6 +295,81 @@ program
   });
 
 /**
+ * Templates command - shows or applies common project templates
+ */
+program
+  .command('templates')
+  .description('Show or apply common project ignore templates')
+  .option('--list', 'List available templates')
+  .option('--apply <template>', 'Apply a template to current config')
+  .action(async (options) => {
+    try {
+      const templates = {
+        node: {
+          name: 'Node.js',
+          ignorePatterns: ['node_modules/**', 'dist/**', 'build/**', '*.log', '.env*', 'coverage/**'],
+          includeExtensions: ['.js', '.ts', '.jsx', '.tsx', '.json', '.md']
+        },
+        python: {
+          name: 'Python',
+          ignorePatterns: ['__pycache__/**', '*.pyc', '*.pyo', 'venv/**', '.venv/**', 'dist/**', '*.egg-info/**'],
+          includeExtensions: ['.py', '.pyx', '.pyi', '.txt', '.md', '.yaml', '.yml', '.json']
+        },
+        java: {
+          name: 'Java',
+          ignorePatterns: ['target/**', 'build/**', '*.class', '*.jar', '*.war', '.gradle/**'],
+          includeExtensions: ['.java', '.kt', '.scala', '.xml', '.properties', '.md']
+        },
+        web: {
+          name: 'Web Frontend',
+          ignorePatterns: ['node_modules/**', 'dist/**', 'build/**', '.next/**', '.nuxt/**', 'public/build/**'],
+          includeExtensions: ['.js', '.ts', '.jsx', '.tsx', '.vue', '.svelte', '.html', '.css', '.scss', '.json']
+        },
+        cpp: {
+          name: 'C/C++',
+          ignorePatterns: ['build/**', 'cmake-build-*/**', '*.o', '*.obj', '*.exe', '*.out', '*.a', '*.so'],
+          includeExtensions: ['.c', '.cpp', '.cc', '.cxx', '.h', '.hpp', '.hxx', '.cmake', '.md']
+        }
+      };
+      
+      if (options.list) {
+        console.log('📋 Available templates:');
+        Object.entries(templates).forEach(([key, template]) => {
+          console.log(`  ${key.padEnd(8)} - ${template.name}`);
+        });
+        console.log('\nUsage: dir2txt templates --apply <template>');
+        return;
+      }
+      
+      if (options.apply) {
+        const template = templates[options.apply];
+        if (!template) {
+          console.error(`❌ Unknown template: ${options.apply}`);
+          console.log('Use --list to see available templates');
+          process.exit(1);
+        }
+        
+        console.log(`📋 Applying ${template.name} template...`);
+        await updateConfig({
+          ignorePatterns: template.ignorePatterns,
+          includeExtensions: template.includeExtensions
+        });
+        console.log(`✅ Applied ${template.name} template successfully`);
+        return;
+      }
+      
+      // Show help if no options
+      console.log('📋 Project Templates');
+      console.log('Use --list to see available templates');
+      console.log('Use --apply <template> to apply a template');
+      
+    } catch (error) {
+      console.error('❌ Error with templates:', error.message);
+      process.exit(1);
+    }
+  });
+
+/**
  * Status command - shows current directory info
  */
 program
@@ -336,10 +424,63 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-// Parse command line arguments
-program.parse();
+/**
+ * Beautiful welcome screen for new users
+ */
+function showWelcome() {
+  console.log(`
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                                                             │
+│   ██████╗ ██╗██████╗ ██████╗ ████████╗██╗  ██╗████████╗                    │
+│   ██╔══██╗██║██╔══██╗╚════██╗╚══██╔══╝╚██╗██╔╝╚══██╔══╝                    │
+│   ██║  ██║██║██████╔╝ █████╔╝   ██║    ╚███╔╝    ██║                       │
+│   ██║  ██║██║██╔══██╗██╔═══╝    ██║    ██╔██╗    ██║                       │
+│   ██████╔╝██║██║  ██║███████╗   ██║   ██╔╝ ██╗   ██║                       │
+│   ╚═════╝ ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝                       │
+│                                                                             │
+│                  Convert directories to LLM-friendly text                  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 
-// If no command provided, show help
+📚 QUICK START:
+
+  Basic usage:
+    dir2txt run                     # Generate text from current directory
+    dir2txt run --clipboard         # Copy output to clipboard
+    dir2txt run --dry               # Show file tree only
+    dir2txt run --markdown          # Output in markdown format
+
+  Configuration:
+    dir2txt config                  # Create default configuration
+    dir2txt templates --list        # Show project templates
+    dir2txt templates --apply node  # Apply Node.js template
+
+  Examples:
+    dir2txt run --extensions .js .ts --output code.txt
+    dir2txt run --ignore "*.test.js" --clipboard
+    dir2txt run --preview 5 --markdown
+
+📖 COMMON USE CASES:
+
+  🤖 For AI Analysis:    dir2txt run --clipboard --extensions .js .ts
+  📝 For Documentation:  dir2txt run --markdown --output docs/code.md
+  🔍 Quick Preview:      dir2txt run --dry --preview 10
+  📋 Copy to ChatGPT:    dir2txt run --clipboard --ignore "test/**"
+
+💡 HELP:
+
+    dir2txt --help          # Show all commands
+    dir2txt <command> --help # Show command-specific help
+    dir2txt status          # Show current directory status
+
+🚀 Get started with: dir2txt run --dry
+`);
+}
+
+// If no command provided, show welcome screen
 if (process.argv.length <= 2) {
-  program.help();
+  showWelcome();
+} else {
+  // Parse command line arguments
+  program.parse();
 }

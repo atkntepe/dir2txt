@@ -1,20 +1,42 @@
 {
   "name": "dir2txt",
   "version": "1.0.0",
-  "description": "",
+  "description": "Convert project directory structure and files to LLM-friendly text format",
   "main": "bin/cli.js",
   "bin": {
     "dir2txt": "./bin/cli.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/atkntepe/dir2txt.git"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "cli",
+    "directory",
+    "text",
+    "llm",
+    "ai",
+    "codebase",
+    "export",
+    "tree",
+    "files",
+    "analysis"
+  ],
+  "author": "Your Name <your.email@example.com>",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
   "license": "ISC",
   "type": "module",
   "bugs": {
@@ -22,11 +44,13 @@
   },
   "homepage": "https://github.com/atkntepe/dir2txt#readme",
   "dependencies": {
+    "clipboardy": "^4.0.0",
     "commander": "^14.0.0",
     "fast-glob": "^3.3.3",
     "ignore": "^7.0.5"
   },
   "devDependencies": {
-    "eslint": "^9.31.0"
+    "eslint": "^9.31.0",
+    "jest": "^30.0.5"
   }
 }
