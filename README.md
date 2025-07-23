@@ -182,10 +182,9 @@ Total time: 45ms
 ```
 
 ### Markdown Format
-```markdown
+```
 # Project Structure
 
-```
 ├── src/
 │   ├── index.js
 │   └── utils/
