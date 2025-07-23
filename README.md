@@ -44,13 +44,13 @@ dir2txt
 
 ### Basic Usage
 ```bash
-# Generate text from current directory
+# Generate text to directory-output.txt (default)
 dir2txt run
 
-# Save to file
+# Save to custom file
 dir2txt run --output project.txt
 
-# Only show directory structure (no file contents)
+# Only show directory structure (no file created)
 dir2txt run --dry
 
 # Generate in markdown format
@@ -218,14 +218,14 @@ console.log('Hello World');
 
 ### For AI/LLM Analysis
 ```bash
-# Generate complete codebase for AI analysis
-dir2txt run --output codebase.txt
+# Generate complete codebase for AI analysis (creates directory-output.txt)
+dir2txt run
 
 # Copy directly to clipboard for ChatGPT/Claude
 dir2txt run --clipboard --extensions .js .ts
 
 # Focus on specific file types
-dir2txt run --extensions .js .ts --markdown > frontend-code.md
+dir2txt run --extensions .js .ts --output frontend-code.txt
 ```
 
 ### For Documentation

@@ -5,7 +5,7 @@
  * 
  * Usage Examples:
  * 
- * Basic usage (generate text from current directory):
+ * Basic usage (generate text to directory-output.txt):
  *   dir2txt run
  * 
  * Generate with specific options:
@@ -121,10 +121,17 @@ program
       
       console.log(`✅ Found ${files.length} files`);
       
+      // Determine output file - use default if not specified and not clipboard/dry mode
+      let outputFile = options.output;
+      if (!outputFile && !options.clipboard && !options.dry) {
+        outputFile = 'directory-output.txt';
+        console.log(`📄 No output file specified, creating: ${outputFile}`);
+      }
+      
       // Generate output options
       const generateOptions = {
         dry: options.dry,
-        outputFile: options.output,
+        outputFile: outputFile,
         clipboard: options.clipboard,
         markdown: options.markdown,
         concurrency: 10
@@ -445,9 +452,9 @@ function showWelcome() {
 📚 QUICK START:
 
   Basic usage:
-    dir2txt run                     # Generate text from current directory
+    dir2txt run                     # Generate text to directory-output.txt
     dir2txt run --clipboard         # Copy output to clipboard
-    dir2txt run --dry               # Show file tree only
+    dir2txt run --dry               # Show file tree only (no file created)
     dir2txt run --markdown          # Output in markdown format
 
   Configuration:
