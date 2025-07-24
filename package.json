@@ -1,5 +1,5 @@
 {
-  "name": "@atkntepe/dir2txt",
+  "name": "dir2txt",
   "version": "0.1.4",
   "description": "Convert project directory structure and files to LLM-friendly text format",
   "main": "bin/cli.js",
@@ -14,9 +14,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/atkntepe/dir2txt.git"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
   },
   "keywords": [
     "cli",
