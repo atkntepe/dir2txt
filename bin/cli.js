@@ -46,6 +46,7 @@ import {
   getDefaultConfig 
 } from '../lib/config.js';
 import { startInteractiveMode } from '../lib/interactive.js';
+import { validateConfigWithSuggestions, formatValidationErrors } from '../lib/validation.js';
 
 // Get package.json for version info
 const __filename = fileURLToPath(import.meta.url);
@@ -163,8 +164,49 @@ program
   .command('config')
   .description('Create default .dir2txt.json configuration file')
   .option('--show', 'Show current configuration')
+  .option('--validate', 'Validate current configuration file')
   .action(async (options) => {
     try {
+      if (options.validate) {
+        console.log('🔍 Validating configuration file...\n');
+        
+        try {
+          const configPath = path.join(process.cwd(), '.dir2txt.json');
+          const configData = await fs.readFile(configPath, 'utf8');
+          const config = JSON.parse(configData);
+          
+          const validation = validateConfigWithSuggestions(config);
+          
+          if (validation.isValid) {
+            console.log('✅ Configuration is valid!');
+            if (validation.warnings && validation.warnings.length > 0) {
+              console.log(formatValidationErrors([], validation.warnings));
+            }
+          } else {
+            console.log('❌ Configuration has errors:');
+            console.log(formatValidationErrors(validation.errors, validation.warnings));
+            
+            if (validation.suggestions.length > 0) {
+              console.log('💡 Suggestions:');
+              validation.suggestions.forEach(suggestion => console.log(`   ${suggestion}`));
+            }
+            
+            console.log('\n🔧 Sanitized configuration would be:');
+            console.log(JSON.stringify(validation.sanitized, null, 2));
+          }
+        } catch (error) {
+          if (error.code === 'ENOENT') {
+            console.log('📋 No configuration file found. Run "dir2txt config" to create one.');
+          } else if (error instanceof SyntaxError) {
+            console.error('❌ Invalid JSON in .dir2txt.json:');
+            console.error(`   ${error.message}`);
+          } else {
+            console.error(`❌ Error reading config: ${error.message}`);
+          }
+        }
+        return;
+      }
+      
       if (options.show) {
         const config = await loadConfig();
         if (Object.keys(config).length === 0) {
