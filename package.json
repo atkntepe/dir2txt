@@ -7,9 +7,9 @@
     "dir2txt": "./bin/cli.js"
   },
   "scripts": {
-    "test": "node --experimental-vm-modules ./node_modules/.bin/jest",
-    "test:watch": "node --experimental-vm-modules ./node_modules/.bin/jest --watch",
-    "test:coverage": "node --experimental-vm-modules ./node_modules/.bin/jest --coverage"
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest",
+    "test:watch": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --watch",
+    "test:coverage": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --coverage"
   },
   "repository": {
     "type": "git",
@@ -50,6 +50,9 @@
     "ignore": "^7.0.5"
   },
   "devDependencies": {
+    "@babel/core": "^7.23.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-jest": "^30.0.5",
     "eslint": "^9.31.0",
     "jest": "^30.0.5"
   }

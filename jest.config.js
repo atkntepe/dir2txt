@@ -1,10 +1,9 @@
 export default {
   testEnvironment: 'node',
-  globals: {
-    'ts-jest': {
-      useESM: true
-    }
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1'
   },
+  transform: {},
   collectCoverageFrom: [
     'lib/**/*.js',
     'bin/**/*.js',
@@ -17,5 +16,5 @@ export default {
     '**/tests/**/*.test.js'
   ],
   verbose: true,
-  transform: {}
+  testTimeout: 10000
 };
