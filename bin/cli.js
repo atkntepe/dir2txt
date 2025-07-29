@@ -45,6 +45,7 @@ import {
   deleteConfig,
   getDefaultConfig 
 } from '../lib/config.js';
+import { startInteractiveMode } from '../lib/interactive.js';
 
 // Get package.json for version info
 const __filename = fileURLToPath(import.meta.url);
@@ -407,6 +408,25 @@ program
     }
   });
 
+/**
+ * Interactive command - starts interactive mode
+ */
+program
+  .command('interactive')
+  .alias('i')
+  .description('Start interactive mode with guided interface')
+  .action(async () => {
+    try {
+      await startInteractiveMode();
+    } catch (error) {
+      console.error('❌ Error in interactive mode:', error.message);
+      if (process.env.DEBUG) {
+        console.error(error.stack);
+      }
+      process.exit(1);
+    }
+  });
+
 // Handle unknown commands
 program.on('command:*', function (operands) {
   console.error(`❌ Unknown command: ${operands[0]}`);
@@ -438,14 +458,14 @@ function showWelcome() {
   console.log(`
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                                                                             │
-│   ██████╗ ██╗██████╗ ██████╗ ████████╗██╗  ██╗████████╗                    │
-│   ██╔══██╗██║██╔══██╗╚════██╗╚══██╔══╝╚██╗██╔╝╚══██╔══╝                    │
-│   ██║  ██║██║██████╔╝ █████╔╝   ██║    ╚███╔╝    ██║                       │
-│   ██║  ██║██║██╔══██╗██╔═══╝    ██║    ██╔██╗    ██║                       │
-│   ██████╔╝██║██║  ██║███████╗   ██║   ██╔╝ ██╗   ██║                       │
-│   ╚═════╝ ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝                       │
+│             ██████╗ ██╗██████╗ ██████╗ ████████╗██╗  ██╗████████╗           │
+│             ██╔══██╗██║██╔══██╗╚════██╗╚══██╔══╝╚██╗██╔╝╚══██╔══╝           │
+│             ██║  ██║██║██████╔╝ █████╔╝   ██║    ╚███╔╝    ██║              │
+│             ██║  ██║██║██╔══██╗██╔═══╝    ██║    ██╔██╗    ██║              │
+│             ██████╔╝██║██║  ██║███████╗   ██║   ██╔╝ ██╗   ██║              │
+│             ╚═════╝ ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝   ╚═╝              │
 │                                                                             │
-│                  Convert directories to LLM-friendly text                  │
+│                  Convert directories to LLM-friendly text                   │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
@@ -461,6 +481,10 @@ function showWelcome() {
     dir2txt config                  # Create default configuration
     dir2txt templates --list        # Show project templates
     dir2txt templates --apply node  # Apply Node.js template
+
+  Interactive mode:
+    dir2txt interactive             # Start guided interactive mode
+    dir2txt i                       # Short alias for interactive mode
 
   Examples:
     dir2txt run --extensions .js .ts --output code.txt
@@ -480,7 +504,7 @@ function showWelcome() {
     dir2txt <command> --help # Show command-specific help
     dir2txt status          # Show current directory status
 
-🚀 Get started with: dir2txt run --dry
+🚀 Get started with: dir2txt interactive (guided mode) or dir2txt run --dry
 `);
 }
 
