@@ -11,7 +11,7 @@
     "test:watch": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --watch",
     "test:coverage": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --coverage",
     "demo": "node bin/cli.js run --include-relationships --file-summaries --extensions .js --clipboard",
-    "demo:full": "node bin/cli.js run --include-relationships --file-summaries --include-dependencies --group-by-feature --include-framework-context --clipboard",
+    "demo:full": "node bin/cli.js run --include-relationships --file-summaries --include-dependencies --group-by-feature --incremental --clipboard",
     "interactive": "node bin/cli.js interactive"
   },
   "repository": {
