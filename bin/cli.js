@@ -29,7 +29,7 @@
  * 
  * Smart file context & relationships:
  *   dir2txt run --include-relationships  # Show import/export relationships
- *   dir2txt run --file-summaries         # Add AI-generated file purpose summaries
+ *   dir2txt run --file-summaries         # Add pattern-based file purpose summaries
  *   dir2txt run --include-dependencies   # Show dependency graph and relationships
  *   dir2txt run --group-by-feature       # Group files by functionality/module
  * 
@@ -140,7 +140,7 @@ program
   .option('--find-todos', 'Search for TODO, FIXME, and similar patterns')
   .option('--find-functions', 'Search for function definitions and patterns')
   .option('--include-relationships', 'Include import/export relationships between files')
-  .option('--file-summaries', 'Add AI-generated purpose summaries for each file')
+  .option('--file-summaries', 'Add pattern-based purpose summaries for each file')
   .option('--include-dependencies', 'Show dependency graph and file relationships')
   .option('--group-by-feature', 'Group files by functionality/module instead of directory')
   .option('--incremental', 'Only process changed files using cache')
@@ -947,7 +947,7 @@ function showWelcome() {
 
 📖 COMMON USE CASES:
 
-  🤖 For AI Analysis:    dir2txt run --include-relationships --file-summaries --clipboard
+  🤖 For LLM Analysis:   dir2txt run --include-relationships --file-summaries --clipboard
   📝 For Documentation:  dir2txt run --markdown --file-summaries --output docs/code.md
   🔍 Quick Preview:      dir2txt run --dry --preview 10
   📋 Copy to ChatGPT:    dir2txt run --clipboard --include-relationships --ignore "test/**"
@@ -961,7 +961,7 @@ function showWelcome() {
 🔗 RELATIONSHIP FEATURES:
   
     --include-relationships      # Show imports/exports between files
-    --file-summaries            # Add AI-generated file purpose descriptions  
+    --file-summaries            # Add pattern-based file purpose descriptions  
     --include-dependencies      # Display dependency graph and file relationships
     --group-by-feature          # Group files by functionality instead of directory
 

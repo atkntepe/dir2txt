@@ -14,7 +14,7 @@ A powerful CLI tool that converts your project's directory structure and file co
 
 ### 🔗 **Smart Relationship Analysis**
 - **Import/Export Tracking**: Analyze dependencies between files
-- **AI-Generated Summaries**: Get intelligent file purpose descriptions
+- **File Summaries**: Pattern-based file purpose identification
 - **Dependency Graphs**: Visualize project structure and relationships
 - **Functional Grouping**: Organize files by functionality instead of directories
 
@@ -42,7 +42,6 @@ A powerful CLI tool that converts your project's directory structure and file co
 ### 📋 **Project Management**
 - **Project Templates**: Pre-configured settings for Node.js, Python, Java, Web, C++
 - **Flexible Configuration**: JSON config files with inheritance
-- **Status Dashboard**: Current directory analysis and health checks
 - **Template System**: Quick setup for common project types
 
 ## 📦 Installation
@@ -77,7 +76,7 @@ dir2txt run --markdown --output docs/codebase.md
 
 ### Smart Analysis Features
 ```bash
-# Include file relationships and AI summaries
+# Include file relationships and summaries
 dir2txt run --include-relationships --file-summaries --clipboard
 
 # Show dependency graph and group by functionality
@@ -229,7 +228,7 @@ dir2txt templates --apply cpp     # C/C++
 | `config` | Configuration | `--show` |
 | `update` | Update config | `--add`, `--remove`, `--add-ext`, `--remove-ext` |
 | `templates` | Project templates | `--list`, `--apply` |
-| `status` | Directory status | Project analysis and health check |
+| `status` | Directory status | Show current directory and config status |
 
 ## 📖 Output Examples
 
@@ -244,7 +243,7 @@ Total Exports: 89
 === FILE CONTENTS ===
 
 --- src/components/Button.jsx ---
-Purpose: React component for reusable button with theme support
+Purpose: Component module - Button
 Imports: react, ./styles.css, ../utils/helpers
 Language: javascript
 
@@ -287,7 +286,7 @@ export const Button = ({ label, onClick, variant = 'primary' }) => {
 
 ### For AI/LLM Analysis
 ```bash
-# Complete codebase with smart context
+# Complete codebase with context
 dir2txt run --include-relationships --file-summaries --clipboard
 
 # Fast incremental updates during development
@@ -342,7 +341,7 @@ dir2txt/
 │   ├── config.js           # Configuration management
 │   ├── traverse.js         # Directory traversal and filtering  
 │   ├── generate.js         # Text generation and formatting
-│   ├── relationships.js    # Import/export analysis & AI summaries
+│   ├── relationships.js    # Import/export analysis & file summaries
 │   ├── search.js          # Content search and pattern matching
 │   ├── interactive.js     # Interactive mode interface
 │   ├── watcher.js         # File watching and live updates
