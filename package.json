@@ -1,6 +1,6 @@
 {
   "name": "dir2txt",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Convert project directory structure and files to LLM-friendly text format",
   "main": "bin/cli.js",
   "bin": {
