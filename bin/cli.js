@@ -17,6 +17,30 @@
  *   dir2txt run --markdown               # Output in markdown format
  *   dir2txt run --ignore "*.test.js"     # Add extra ignore patterns
  * 
+ * Search within file contents:
+ *   dir2txt run --search "TODO|FIXME" --context 3    # Search with context
+ *   dir2txt run --find-todos             # Find TODO, FIXME patterns
+ *   dir2txt run --find-functions         # Find function definitions
+ *   dir2txt run --content-filter "async" --regex     # Filter by content
+ * 
+ * Filter by modification date:
+ *   dir2txt run --since "2024-01-01"     # Files modified since date
+ *   dir2txt run --before "2024-12-31"    # Files modified before date
+ * 
+ * Smart file context & relationships:
+ *   dir2txt run --include-relationships  # Show import/export relationships
+ *   dir2txt run --file-summaries         # Add AI-generated file purpose summaries
+ *   dir2txt run --include-dependencies   # Show dependency graph and relationships
+ *   dir2txt run --group-by-feature       # Group files by functionality/module
+ *   dir2txt run --include-framework-context # Detect and show framework info
+ * 
+ * Watch mode (live updates):
+ *   dir2txt watch                        # Watch current directory
+ *   dir2txt watch --clipboard            # Auto-copy to clipboard
+ *   dir2txt watch --output live.txt      # Output to file
+ *   dir2txt watch --debounce 500ms       # Custom debounce delay
+ *   dir2txt watch --ignore-temp          # Ignore temp files
+ * 
  * Config management:
  *   dir2txt config                       # Create default .dir2txt.json
  *   dir2txt update --add "*.test.js"     # Add ignore pattern
@@ -47,6 +71,20 @@ import {
 } from '../lib/config.js';
 import { startInteractiveMode } from '../lib/interactive.js';
 import { validateConfigWithSuggestions, formatValidationErrors } from '../lib/validation.js';
+import { 
+  searchInFiles, 
+  filterByDate, 
+  filterByContent, 
+  findCodePatterns, 
+  findFunctionPatterns,
+  generateSearchStats 
+} from '../lib/search.js';
+import { startWatchMode, parseDebounceOption } from '../lib/watcher.js';
+import { 
+  analyzeProjectRelationships, 
+  groupFilesByFunction, 
+  generateDependencyGraph 
+} from '../lib/relationships.js';
 
 // Get package.json for version info
 const __filename = fileURLToPath(import.meta.url);
@@ -85,6 +123,20 @@ program
   .option('--extensions <ext...>', 'Only include files with these extensions (e.g., .js .ts)')
   .option('--ignore <patterns...>', 'Additional ignore patterns (e.g., "*.test.js" "temp/**")')
   .option('--max-depth <depth>', 'Maximum directory depth to traverse', parseInt)
+  .option('--search <pattern>', 'Search for pattern within file contents')
+  .option('--regex', 'Treat search pattern as regular expression')
+  .option('--case-sensitive', 'Make search case sensitive')
+  .option('--context <lines>', 'Show N lines of context around matches', parseInt)
+  .option('--since <date>', 'Include only files modified since date (YYYY-MM-DD)')
+  .option('--before <date>', 'Include only files modified before date (YYYY-MM-DD)')
+  .option('--content-filter <pattern>', 'Include only files containing pattern')
+  .option('--find-todos', 'Search for TODO, FIXME, and similar patterns')
+  .option('--find-functions', 'Search for function definitions and patterns')
+  .option('--include-relationships', 'Include import/export relationships between files')
+  .option('--file-summaries', 'Add AI-generated purpose summaries for each file')
+  .option('--include-dependencies', 'Show dependency graph and file relationships')
+  .option('--group-by-feature', 'Group files by functionality/module instead of directory')
+  .option('--include-framework-context', 'Detect and include framework/language information')
   .action(async (options) => {
     try {
       console.log('🔍 Starting dir2txt...');
@@ -114,7 +166,7 @@ program
       
       // Get list of files
       console.log('📁 Scanning directory...');
-      const files = await getFiles(traverseOptions);
+      let files = await getFiles(traverseOptions);
       
       if (files.length === 0) {
         console.log('❌ No files found matching criteria');
@@ -122,6 +174,143 @@ program
       }
       
       console.log(`✅ Found ${files.length} files`);
+
+      // Apply date filtering if specified
+      if (options.since || options.before) {
+        console.log('📅 Applying date filters...');
+        files = await filterByDate(files, {
+          since: options.since,
+          before: options.before
+        });
+        console.log(`✅ ${files.length} files after date filtering`);
+      }
+
+      // Apply content filtering if specified
+      if (options.contentFilter) {
+        console.log('🔍 Applying content filter...');
+        files = await filterByContent(files, options.contentFilter, {
+          regex: options.regex,
+          caseSensitive: options.caseSensitive
+        });
+        console.log(`✅ ${files.length} files contain the specified pattern`);
+      }
+
+      // Handle search operations
+      let searchResults = null;
+      
+      if (options.search) {
+        console.log(`🔍 Searching for pattern: ${options.search}`);
+        searchResults = await searchInFiles(files, options.search, {
+          regex: options.regex,
+          caseSensitive: options.caseSensitive,
+          contextLines: options.context || 0,
+          highlightMatches: true
+        });
+        
+        const stats = generateSearchStats(searchResults, options.search);
+        console.log(`✅ Found ${stats.totalMatches} matches in ${stats.totalFiles} files`);
+      }
+
+      if (options.findTodos) {
+        console.log('🔍 Searching for TODO patterns...');
+        const todoResults = await findCodePatterns(files, {
+          contextLines: options.context || 2
+        });
+        
+        console.log('📋 TODO Pattern Results:');
+        Object.entries(todoResults).forEach(([pattern, data]) => {
+          if (data.results.length > 0) {
+            console.log(`  ${pattern.toUpperCase()}: ${data.stats.totalMatches} matches in ${data.stats.totalFiles} files`);
+          }
+        });
+        
+        // Store results for output
+        searchResults = todoResults;
+      }
+
+      if (options.findFunctions) {
+        console.log('🔍 Searching for function patterns...');
+        const functionResults = await findFunctionPatterns(files, {
+          contextLines: options.context || 1
+        });
+        
+        console.log('📋 Function Pattern Results:');
+        functionResults.forEach(pattern => {
+          if (pattern.results.length > 0) {
+            console.log(`  ${pattern.name}: ${pattern.stats.totalMatches} matches in ${pattern.stats.totalFiles} files`);
+          }
+        });
+        
+        // Store results for output
+        searchResults = functionResults;
+      }
+
+      // If we have search results and no other output mode, display them
+      if (searchResults && !options.output && !options.clipboard && !options.dry) {
+        console.log('\n📊 Search Results:');
+        console.log('─'.repeat(50));
+        
+        if (Array.isArray(searchResults)) {
+          // Handle search results from searchInFiles
+          searchResults.forEach(result => {
+            console.log(`\n📄 ${result.filePath} (${result.matchCount} matches):`);
+            result.matches.forEach((match, index) => {
+              if (index < 10) { // Limit displayed matches
+                console.log(`  Line ${match.lineNumber}: ${match.line}`);
+                if (match.context) {
+                  if (match.context.before.length > 0) {
+                    match.context.before.forEach((line, i) => {
+                      console.log(`    ${match.lineNumber - match.context.before.length + i}: ${line}`);
+                    });
+                  }
+                  if (match.context.after.length > 0) {
+                    match.context.after.forEach((line, i) => {
+                      console.log(`    ${match.lineNumber + i + 1}: ${line}`);
+                    });
+                  }
+                }
+              }
+            });
+            if (result.matchCount > 10) {
+              console.log(`    ... and ${result.matchCount - 10} more matches`);
+            }
+          });
+        } else if (typeof searchResults === 'object') {
+          // Handle results from pattern searches
+          Object.entries(searchResults).forEach(([pattern, data]) => {
+            if (data.results && data.results.length > 0) {
+              console.log(`\n🔍 ${pattern.toUpperCase()} (${data.description}):`);
+              data.results.forEach(result => {
+                console.log(`  📄 ${result.filePath} (${result.matchCount} matches)`);
+                result.matches.slice(0, 5).forEach(match => {
+                  console.log(`    Line ${match.lineNumber}: ${match.line}`);
+                });
+                if (result.matchCount > 5) {
+                  console.log(`    ... and ${result.matchCount - 5} more matches`);
+                }
+              });
+            }
+          });
+        }
+        
+        console.log('\n🎉 Search complete!');
+        return;
+      }
+
+      // Analyze file relationships if requested
+      let projectAnalysis = null;
+      if (options.includeRelationships || options.fileSummaries || options.includeDependencies || 
+          options.groupByFeature || options.includeFrameworkContext) {
+        console.log('🔗 Analyzing file relationships...');
+        
+        projectAnalysis = await analyzeProjectRelationships(files);
+        console.log(`✅ Analyzed relationships for ${projectAnalysis.stats.analyzedFiles} files`);
+        console.log(`   Found ${projectAnalysis.stats.totalImports} imports and ${projectAnalysis.stats.totalExports} exports`);
+        
+        if (projectAnalysis.stats.detectedFrameworks.length > 0) {
+          console.log(`   Detected frameworks: ${projectAnalysis.stats.detectedFrameworks.join(', ')}`);
+        }
+      }
       
       // Determine output file - use default if not specified and not clipboard/dry mode
       let outputFile = options.output;
@@ -136,7 +325,14 @@ program
         outputFile: outputFile,
         clipboard: options.clipboard,
         markdown: options.markdown,
-        concurrency: 10
+        concurrency: 10,
+        // Relationship analysis options
+        includeRelationships: options.includeRelationships,
+        fileSummaries: options.fileSummaries,
+        includeDependencies: options.includeDependencies,
+        groupByFeature: options.groupByFeature,
+        includeFrameworkContext: options.includeFrameworkContext,
+        projectAnalysis: projectAnalysis
       };
       
       // Generate preview or full output
@@ -469,6 +665,89 @@ program
     }
   });
 
+/**
+ * Watch command - monitors directory for changes and regenerates output
+ */
+program
+  .command('watch')
+  .alias('w')
+  .description('Watch directory for changes and automatically regenerate output')
+  .option('--output <file>', 'Output file to write (auto-updates on changes)')
+  .option('--clipboard', 'Automatically copy output to clipboard on changes')
+  .option('--debounce <delay>', 'Debounce delay (e.g., "500ms", "2s", "1000")', '1000ms')
+  .option('--ignore-temp', 'Ignore temporary and build files (uses smart defaults)')
+  .option('--smart-diff', 'Only regenerate when meaningful changes occur')
+  .option('--silent', 'Suppress non-error output')
+  .option('--extensions <ext...>', 'Only watch files with these extensions')
+  .option('--max-depth <depth>', 'Maximum directory depth to watch', parseInt)
+  .option('--max-size <bytes>', 'Maximum file size to include', parseInt)
+  .option('--markdown', 'Output in markdown format')
+  .option('--incremental', 'Use incremental processing (faster for large projects)', true)
+  .action(async (options) => {
+    try {
+      console.log('🚀 Starting dir2txt watch mode...');
+      
+      // Parse debounce option
+      let debounceDelay;
+      try {
+        debounceDelay = parseDebounceOption(options.debounce);
+      } catch (error) {
+        console.error(`❌ ${error.message}`);
+        process.exit(1);
+      }
+      
+      // Validate output options
+      if (!options.output && !options.clipboard) {
+        console.log('💡 No output method specified. Use --output <file> or --clipboard');
+        console.log('   Defaulting to stdout (will print updates to terminal)');
+      }
+      
+      // Prepare watch options
+      const watchOptions = {
+        debounce: debounceDelay,
+        clipboard: options.clipboard,
+        outputFile: options.output,
+        silent: options.silent,
+        smartDiff: options.smartDiff,
+        incremental: options.incremental,
+        extensions: options.extensions,
+        maxDepth: options.maxDepth,
+        maxFileSize: options.maxSize,
+        markdown: options.markdown,
+        ignorePatterns: options.ignoreTemp ? [] : undefined // Use smart defaults if ignoreTemp is enabled
+      };
+      
+      // Start watching
+      const stopWatching = await startWatchMode(process.cwd(), watchOptions);
+      
+      // Handle graceful shutdown
+      const cleanup = async () => {
+        console.log('\n🛑 Shutting down watch mode...');
+        await stopWatching();
+        console.log('✅ Watch mode stopped');
+        process.exit(0);
+      };
+      
+      // Listen for shutdown signals
+      process.on('SIGINT', cleanup);  // Ctrl+C
+      process.on('SIGTERM', cleanup); // Kill signal
+      process.on('SIGHUP', cleanup);  // Hangup signal
+      
+      // Keep the process alive
+      console.log('👀 Watch mode active. Press Ctrl+C to stop.');
+      console.log(`⚙️  Debounce delay: ${debounceDelay}ms`);
+      if (options.clipboard) console.log('📋 Auto-copy to clipboard: enabled');
+      if (options.output) console.log(`📄 Output file: ${options.output}`);
+      
+    } catch (error) {
+      console.error('❌ Error starting watch mode:', error.message);
+      if (process.env.DEBUG) {
+        console.error(error.stack);
+      }
+      process.exit(1);
+    }
+  });
+
 // Handle unknown commands
 program.on('command:*', function (operands) {
   console.error(`❌ Unknown command: ${operands[0]}`);
@@ -532,6 +811,9 @@ function showWelcome() {
     dir2txt run --extensions .js .ts --output code.txt
     dir2txt run --ignore "*.test.js" --clipboard
     dir2txt run --preview 5 --markdown
+    dir2txt run --search "TODO|FIXME" --context 3
+    dir2txt run --find-todos --output todos.txt
+    dir2txt run --since "2024-01-01" --content-filter "async"
 
 📖 COMMON USE CASES:
 
@@ -539,6 +821,9 @@ function showWelcome() {
   📝 For Documentation:  dir2txt run --markdown --output docs/code.md
   🔍 Quick Preview:      dir2txt run --dry --preview 10
   📋 Copy to ChatGPT:    dir2txt run --clipboard --ignore "test/**"
+  🐛 Find Tech Debt:     dir2txt run --find-todos --output tech-debt.txt
+  🔎 Code Review:        dir2txt run --since "2024-01-01" --search "async"
+  📊 Pattern Analysis:   dir2txt run --find-functions --content-filter "class"
 
 💡 HELP:
 

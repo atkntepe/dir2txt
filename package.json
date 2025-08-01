@@ -44,6 +44,7 @@
   },
   "homepage": "https://github.com/atkntepe/dir2txt#readme",
   "dependencies": {
+    "chokidar": "^4.0.0",
     "clipboardy": "^4.0.0",
     "commander": "^14.0.0",
     "fast-glob": "^3.3.3",
