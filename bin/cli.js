@@ -32,7 +32,13 @@
  *   dir2txt run --file-summaries         # Add AI-generated file purpose summaries
  *   dir2txt run --include-dependencies   # Show dependency graph and relationships
  *   dir2txt run --group-by-feature       # Group files by functionality/module
- *   dir2txt run --include-framework-context # Detect and show framework info
+ * 
+ * Incremental processing & caching:
+ *   dir2txt run --incremental            # Only process changed files
+ *   dir2txt run --incremental --cache-dir .cache # Custom cache directory
+ *   dir2txt run --show-changes           # Show what changed since last run
+ *   dir2txt run --highlight-new          # Highlight new files in output
+ *   dir2txt run --clear-cache            # Clear cache before processing
  * 
  * Watch mode (live updates):
  *   dir2txt watch                        # Watch current directory
@@ -69,6 +75,7 @@ import {
   deleteConfig,
   getDefaultConfig 
 } from '../lib/config.js';
+import { createCache, processIncremental } from '../lib/cache.js';
 import { startInteractiveMode } from '../lib/interactive.js';
 import { validateConfigWithSuggestions, formatValidationErrors } from '../lib/validation.js';
 import { 
@@ -136,7 +143,11 @@ program
   .option('--file-summaries', 'Add AI-generated purpose summaries for each file')
   .option('--include-dependencies', 'Show dependency graph and file relationships')
   .option('--group-by-feature', 'Group files by functionality/module instead of directory')
-  .option('--include-framework-context', 'Detect and include framework/language information')
+  .option('--incremental', 'Only process changed files using cache')
+  .option('--cache-dir <path>', 'Cache directory path (default: .dir2txt-cache)')
+  .option('--show-changes', 'Show what files changed since last run')
+  .option('--highlight-new', 'Highlight new files in output')
+  .option('--clear-cache', 'Clear cache before processing')
   .action(async (options) => {
     try {
       console.log('🔍 Starting dir2txt...');
@@ -164,6 +175,20 @@ program
         traverseOptions.ignorePatterns = [...baseIgnores, ...options.ignore];
       }
       
+      // Initialize cache if incremental processing is enabled
+      let cache = null;
+      if (options.incremental || options.showChanges || options.clearCache) {
+        cache = await createCache({
+          cacheDir: options.cacheDir,
+          enabled: !options.clearCache
+        });
+
+        if (options.clearCache) {
+          await cache.clear();
+          cache = await createCache({ cacheDir: options.cacheDir });
+        }
+      }
+
       // Get list of files
       console.log('📁 Scanning directory...');
       let files = await getFiles(traverseOptions);
@@ -175,24 +200,53 @@ program
       
       console.log(`✅ Found ${files.length} files`);
 
+      // Handle incremental processing and change detection
+      let changedFiles = files;
+      let changeInfo = null;
+      
+      if (cache) {
+        changeInfo = await cache.getChangedFiles(files);
+        
+        if (options.showChanges) {
+          console.log(`\n📊 Change Analysis:`);
+          console.log(`   📄 Total files: ${files.length}`);
+          console.log(`   🔄 Changed: ${changeInfo.changed.length}`);
+          console.log(`   ✨ New: ${changeInfo.new.length}`);
+          console.log(`   🗑️  Deleted: ${changeInfo.deleted.length}`);
+          
+          if (changeInfo.new.length > 0) {
+            console.log(`   📝 New files: ${changeInfo.new.slice(0, 5).map(f => path.basename(f)).join(', ')}${changeInfo.new.length > 5 ? ` (+${changeInfo.new.length - 5} more)` : ''}`);
+          }
+        }
+        
+        if (options.incremental) {
+          changedFiles = changeInfo.changed;
+          if (changedFiles.length === 0) {
+            console.log('✅ No changes detected, skipping processing');
+            return;
+          }
+          console.log(`🚀 Processing ${changedFiles.length} changed files`);
+        }
+      }
+
       // Apply date filtering if specified
       if (options.since || options.before) {
         console.log('📅 Applying date filters...');
-        files = await filterByDate(files, {
+        changedFiles = await filterByDate(changedFiles, {
           since: options.since,
           before: options.before
         });
-        console.log(`✅ ${files.length} files after date filtering`);
+        console.log(`✅ ${changedFiles.length} files after date filtering`);
       }
 
       // Apply content filtering if specified
       if (options.contentFilter) {
         console.log('🔍 Applying content filter...');
-        files = await filterByContent(files, options.contentFilter, {
+        changedFiles = await filterByContent(changedFiles, options.contentFilter, {
           regex: options.regex,
           caseSensitive: options.caseSensitive
         });
-        console.log(`✅ ${files.length} files contain the specified pattern`);
+        console.log(`✅ ${changedFiles.length} files contain the specified pattern`);
       }
 
       // Handle search operations
@@ -300,16 +354,13 @@ program
       // Analyze file relationships if requested
       let projectAnalysis = null;
       if (options.includeRelationships || options.fileSummaries || options.includeDependencies || 
-          options.groupByFeature || options.includeFrameworkContext) {
+          options.groupByFeature) {
         console.log('🔗 Analyzing file relationships...');
         
         projectAnalysis = await analyzeProjectRelationships(files);
         console.log(`✅ Analyzed relationships for ${projectAnalysis.stats.analyzedFiles} files`);
         console.log(`   Found ${projectAnalysis.stats.totalImports} imports and ${projectAnalysis.stats.totalExports} exports`);
         
-        if (projectAnalysis.stats.detectedFrameworks.length > 0) {
-          console.log(`   Detected frameworks: ${projectAnalysis.stats.detectedFrameworks.join(', ')}`);
-        }
       }
       
       // Determine output file - use default if not specified and not clipboard/dry mode
@@ -331,15 +382,30 @@ program
         fileSummaries: options.fileSummaries,
         includeDependencies: options.includeDependencies,
         groupByFeature: options.groupByFeature,
-        includeFrameworkContext: options.includeFrameworkContext,
         projectAnalysis: projectAnalysis
       };
       
       // Generate preview or full output
       if (options.preview) {
-        await generatePreview(files, options.preview, generateOptions);
+        await generatePreview(changedFiles, options.preview, generateOptions);
       } else {
-        await generateText(files, generateOptions);
+        await generateText(changedFiles, {
+          ...generateOptions,
+          cache,
+          changeInfo,
+          highlightNew: options.highlightNew
+        });
+      }
+
+      // Update cache with processed files
+      if (cache) {
+        for (const filePath of changedFiles) {
+          await cache.updateFileCache(filePath, { processed: true, processedAt: new Date().toISOString() });
+        }
+        await cache.save();
+        
+        const stats = cache.getStats();
+        console.log(`💾 Cache updated: ${stats.files} files cached`);
       }
       
       console.log('🎉 Generation complete!');
@@ -683,6 +749,8 @@ program
   .option('--max-size <bytes>', 'Maximum file size to include', parseInt)
   .option('--markdown', 'Output in markdown format')
   .option('--incremental', 'Use incremental processing (faster for large projects)', true)
+  .option('--cache-dir <path>', 'Cache directory path (default: .dir2txt-cache)')
+  .option('--show-changes', 'Show what files changed on each update')
   .action(async (options) => {
     try {
       console.log('🚀 Starting dir2txt watch mode...');
@@ -714,7 +782,9 @@ program
         maxDepth: options.maxDepth,
         maxFileSize: options.maxSize,
         markdown: options.markdown,
-        ignorePatterns: options.ignoreTemp ? [] : undefined // Use smart defaults if ignoreTemp is enabled
+        ignorePatterns: options.ignoreTemp ? [] : undefined, // Use smart defaults if ignoreTemp is enabled
+        cacheDir: options.cacheDir,
+        showChanges: options.showChanges
       };
       
       // Start watching
@@ -764,6 +834,60 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
+/**
+ * Cache management command
+ */
+program
+  .command('cache')
+  .description('Manage incremental processing cache')
+  .option('--clear', 'Clear the cache')
+  .option('--stats', 'Show cache statistics')
+  .option('--cache-dir <path>', 'Cache directory path (default: .dir2txt-cache)')
+  .action(async (options) => {
+    try {
+      const { createCache } = await import('../lib/cache.js');
+      const cache = await createCache({
+        cacheDir: options.cacheDir,
+        enabled: true
+      });
+
+      if (options.clear) {
+        await cache.clear();
+        console.log('✅ Cache cleared successfully');
+        return;
+      }
+
+      if (options.stats) {
+        const stats = cache.getStats();
+        console.log('📊 Cache Statistics:');
+        console.log(`   Cache Directory: ${stats.cacheDir}`);
+        console.log(`   Enabled: ${stats.enabled}`);
+        console.log(`   Cached Files: ${stats.files}`);
+        console.log(`   Snapshots: ${stats.snapshots}`);
+        console.log(`   Relationships: ${stats.relationships}`);
+        return;
+      }
+
+      // Default: show cache info
+      const stats = cache.getStats();
+      console.log('📦 Cache Information:');
+      console.log(`   Directory: ${stats.cacheDir}`);
+      console.log(`   Status: ${stats.enabled ? '✅ Enabled' : '❌ Disabled'}`);
+      console.log(`   Files: ${stats.files}`);
+      console.log('');
+      console.log('Available commands:');
+      console.log('   dir2txt cache --stats    # Show detailed statistics');
+      console.log('   dir2txt cache --clear    # Clear all cached data');
+
+    } catch (error) {
+      console.error('❌ Cache error:', error.message);
+      if (process.env.DEBUG) {
+        console.error(error.stack);
+      }
+      process.exit(1);
+    }
+  });
+
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
   if (process.env.DEBUG) {
@@ -798,6 +922,12 @@ function showWelcome() {
     dir2txt run --dry               # Show file tree only (no file created)
     dir2txt run --markdown          # Output in markdown format
 
+  🔗 SMART RELATIONSHIPS (NEW!):
+    dir2txt run --include-relationships --file-summaries --clipboard
+    dir2txt run --include-dependencies --group-by-feature --output smart.txt
+    dir2txt run --file-summaries --markdown
+    dir2txt run --include-relationships --include-dependencies --clipboard
+
   Configuration:
     dir2txt config                  # Create default configuration
     dir2txt templates --list        # Show project templates
@@ -817,13 +947,31 @@ function showWelcome() {
 
 📖 COMMON USE CASES:
 
-  🤖 For AI Analysis:    dir2txt run --clipboard --extensions .js .ts
-  📝 For Documentation:  dir2txt run --markdown --output docs/code.md
+  🤖 For AI Analysis:    dir2txt run --include-relationships --file-summaries --clipboard
+  📝 For Documentation:  dir2txt run --markdown --file-summaries --output docs/code.md
   🔍 Quick Preview:      dir2txt run --dry --preview 10
-  📋 Copy to ChatGPT:    dir2txt run --clipboard --ignore "test/**"
+  📋 Copy to ChatGPT:    dir2txt run --clipboard --include-relationships --ignore "test/**"
   🐛 Find Tech Debt:     dir2txt run --find-todos --output tech-debt.txt
   🔎 Code Review:        dir2txt run --since "2024-01-01" --search "async"
-  📊 Pattern Analysis:   dir2txt run --find-functions --content-filter "class"
+  📊 Pattern Analysis:   dir2txt run --include-dependencies --group-by-feature --clipboard
+  🕸️  Understand Deps:   dir2txt run --include-dependencies --file-summaries --output deps.txt
+  🚀 Fast Processing:    dir2txt run --incremental --show-changes --clipboard
+  📦 Watch Changes:      dir2txt watch --incremental --show-changes --clipboard
+
+🔗 RELATIONSHIP FEATURES:
+  
+    --include-relationships      # Show imports/exports between files
+    --file-summaries            # Add AI-generated file purpose descriptions  
+    --include-dependencies      # Display dependency graph and file relationships
+    --group-by-feature          # Group files by functionality instead of directory
+
+⚡ INCREMENTAL PROCESSING:
+  
+    --incremental               # Only process changed files (faster for large projects)
+    --cache-dir <path>          # Custom cache directory (default: .dir2txt-cache)
+    --show-changes              # Show what files changed since last run
+    --highlight-new             # Highlight new files in output
+    --clear-cache               # Clear cache before processing
 
 💡 HELP:
 
@@ -831,7 +979,7 @@ function showWelcome() {
     dir2txt <command> --help # Show command-specific help
     dir2txt status          # Show current directory status
 
-🚀 Get started with: dir2txt interactive (guided mode) or dir2txt run --dry
+🚀 Get started with: dir2txt interactive (guided mode) or dir2txt run --include-relationships --file-summaries --clipboard
 `);
 }
 
