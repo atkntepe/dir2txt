@@ -73,55 +73,58 @@ jobs:
               return;
             }
 
-            console.log(`Triaging ${itemType} #${itemNumber}: ${item.title}`);
+            console.log('Triaging ' + itemType + ' #' + itemNumber + ': ' + item.title);
 
             // Build prompt based on type
-            const systemPrompt = `You are a triage bot for dir2txt, a Node.js CLI tool that converts directory structures to LLM-friendly text format.
+            const basePrompt = [
+              'You are a triage bot for dir2txt, a Node.js CLI tool that converts directory structures to LLM-friendly text format.',
+              '',
+              'The project has these main areas:',
+              '- CLI: Command-line interface, arguments, flags (bin/ folder)',
+              '- Output: Text/Markdown formatting, structure display (lib/ folder)',
+              '- Filtering: File/folder exclusion, .gitignore support',
+              '- Clipboard: Copy-to-clipboard functionality',
+              '- Templates: Project type presets (node, python, etc.)',
+              '',
+              'Available labels:',
+              '- bug: Something isn\'t working',
+              '- enhancement: New feature request',
+              '- question: Usage question',
+              '- documentation: Docs need updating',
+              '- cli: Related to CLI commands/flags',
+              '- output: Related to output format',
+              '- filtering: Related to file filtering',
+              '- clipboard: Related to clipboard',
+              '- needs-info: Missing reproduction or details',
+              '- good-first-issue: Simple fix for newcomers'
+            ].join('\n');
 
-The project has these main areas:
-- CLI: Command-line interface, arguments, flags (bin/ folder)
-- Output: Text/Markdown formatting, structure display (lib/ folder)
-- Filtering: File/folder exclusion, .gitignore support
-- Clipboard: Copy-to-clipboard functionality
-- Templates: Project type presets (node, python, etc.)
+            const prAddition = [
+              '',
+              'For PRs, also assess:',
+              '- Does the code look reasonable?',
+              '- Any obvious issues?',
+              '- Use "bot: approved" if looks good',
+              '- Use "bot: needs-review" if complex/uncertain'
+            ].join('\n');
 
-Available labels:
-- bug: Something isn't working
-- enhancement: New feature request
-- question: Usage question
-- documentation: Docs need updating
-- cli: Related to CLI commands/flags
-- output: Related to output format
-- filtering: Related to file filtering
-- clipboard: Related to clipboard
-- needs-info: Missing reproduction or details
-- good-first-issue: Simple fix for newcomers
+            const responseFormat = [
+              '',
+              'Respond with JSON only:',
+              '{',
+              '  "labels": ["bug", "cli"],',
+              '  "comment": "Optional helpful comment or null",',
+              '  "summary": "One sentence summary"',
+              '}'
+            ].join('\n');
 
-${itemType === 'pr' ? `
-For PRs, also assess:
-- Does the code look reasonable?
-- Any obvious issues?
-- Use "bot: approved" if looks good
-- Use "bot: needs-review" if complex/uncertain
-` : ''}
+            const systemPrompt = basePrompt + (itemType === 'pr' ? prAddition : '') + responseFormat;
 
-Respond with JSON only:
-{
-  "labels": ["bug", "cli"],
-  "comment": "Optional helpful comment or null",
-  "summary": "One sentence summary"
-}`;
-
-            const userPrompt = `${itemType === 'pr' ? 'Review this Pull Request' : 'Triage this Issue'}:
-
-**Title:** ${item.title}
-
-**Body:**
-${item.body || '(No description)'}
-
-${itemType === 'pr' ? `**Changed Files:** Will affect the codebase` : ''}
-
-Respond with JSON only.`;
+            const userPrompt = (itemType === 'pr' ? 'Review this Pull Request' : 'Triage this Issue') + ':\n\n' +
+              '**Title:** ' + item.title + '\n\n' +
+              '**Body:**\n' + (item.body || '(No description)') + '\n\n' +
+              (itemType === 'pr' ? '**Changed Files:** Will affect the codebase\n\n' : '') +
+              'Respond with JSON only.';
 
             // Call Claude
             const response = await anthropic.messages.create({
@@ -158,8 +161,8 @@ Respond with JSON only.`;
             // Post comment if provided
             if (result.comment) {
               const commentBody = itemType === 'pr'
-                ? `## 🤖 AI Review\n\n${result.comment}\n\n---\n*Automated review - maintainer will follow up*`
-                : `👋 ${result.comment}\n\n---\n*🤖 Automated triage*`;
+                ? '## 🤖 AI Review\n\n' + result.comment + '\n\n---\n*Automated review - maintainer will follow up*'
+                : '👋 ' + result.comment + '\n\n---\n*🤖 Automated triage*';
 
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
