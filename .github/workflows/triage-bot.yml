@@ -101,11 +101,11 @@ jobs:
 
             const prAddition = [
               '',
-              'For PRs, also assess:',
-              '- Does the code look reasonable?',
-              '- Any obvious issues?',
-              '- Use "bot: approved" if looks good',
-              '- Use "bot: needs-review" if complex/uncertain'
+              'Additional PR-only labels (MUST use one of these for every PR):',
+              '- bot: approved: Code looks good, simple/straightforward change',
+              '- bot: needs-review: Complex change, needs human review',
+              '',
+              'For PRs, assess the code quality and ALWAYS include either "bot: approved" or "bot: needs-review" in your labels array.'
             ].join('\n');
 
             const responseFormat = [
