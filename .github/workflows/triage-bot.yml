@@ -40,8 +40,15 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout triage-bot action
+        uses: actions/checkout@v4
+        with:
+          repository: atkntepe/triage-bot
+          token: ${{ secrets.PAT_TOKEN }}
+          path: .triage-bot-action
+
       - name: Run Triage Bot
-        uses: atkntepe/triage-bot@main
+        uses: ./.triage-bot-action
         with:
           anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
