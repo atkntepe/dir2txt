@@ -57,4 +57,4 @@ jobs:
           issue-number: ${{ github.event.issue.number || inputs.issue_number }}
           pr-number: ${{ github.event.pull_request.number || inputs.pr_number }}
           max-issues: ${{ inputs.max_issues || 5 }}
-          dry-run: ${{ inputs.dry_run || 'true' }}
+          dry-run: ${{ inputs.dry_run }}
