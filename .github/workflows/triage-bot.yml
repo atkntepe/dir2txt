@@ -1,16 +1,35 @@
-name: AI Triage Bot
+name: Triage Bot
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
   pull_request:
-    types: [opened]
+    types: [opened, synchronize]
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Operation mode'
+        type: choice
+        options:
+          - issue
+          - pr
+          - backlog
+          - prioritize
+        default: backlog
       issue_number:
-        description: 'Issue number to triage (optional)'
+        description: 'Issue number (for mode=issue)'
         type: number
-        required: false
+      pr_number:
+        description: 'PR number (for mode=pr)'
+        type: number
+      max_issues:
+        description: 'Max issues to process'
+        type: number
+        default: 5
+      dry_run:
+        description: 'Dry run (no changes)'
+        type: boolean
+        default: true
 
 permissions:
   issues: write
@@ -21,156 +40,14 @@ jobs:
   triage:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Run Triage Bot
+        uses: atkntepe/triage-bot@main
         with:
-          node-version: '20'
-
-      - name: Install dependencies
-        run: npm install @anthropic-ai/sdk
-
-      - name: Run Triage
-        uses: actions/github-script@v7
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        with:
-          script: |
-            const Anthropic = require('@anthropic-ai/sdk');
-
-            const anthropic = new Anthropic.default({
-              apiKey: process.env.ANTHROPIC_API_KEY
-            });
-
-            // Determine what we're triaging
-            const isIssue = context.eventName === 'issues';
-            const isPR = context.eventName === 'pull_request';
-            const isManual = context.eventName === 'workflow_dispatch';
-
-            let item, itemType, itemNumber;
-
-            if (isIssue) {
-              item = context.payload.issue;
-              itemType = 'issue';
-              itemNumber = item.number;
-            } else if (isPR) {
-              item = context.payload.pull_request;
-              itemType = 'pr';
-              itemNumber = item.number;
-            } else if (isManual && '${{ inputs.issue_number }}') {
-              const { data } = await github.rest.issues.get({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: parseInt('${{ inputs.issue_number }}')
-              });
-              item = data;
-              itemType = data.pull_request ? 'pr' : 'issue';
-              itemNumber = item.number;
-            } else {
-              console.log('No item to triage');
-              return;
-            }
-
-            console.log('Triaging ' + itemType + ' #' + itemNumber + ': ' + item.title);
-
-            // Build prompt based on type
-            const basePrompt = [
-              'You are a triage bot for dir2txt, a Node.js CLI tool that converts directory structures to LLM-friendly text format.',
-              '',
-              'The project has these main areas:',
-              '- CLI: Command-line interface, arguments, flags (bin/ folder)',
-              '- Output: Text/Markdown formatting, structure display (lib/ folder)',
-              '- Filtering: File/folder exclusion, .gitignore support',
-              '- Clipboard: Copy-to-clipboard functionality',
-              '- Templates: Project type presets (node, python, etc.)',
-              '',
-              'Available labels:',
-              '- bug: Something isn\'t working',
-              '- enhancement: New feature request',
-              '- question: Usage question',
-              '- documentation: Docs need updating',
-              '- cli: Related to CLI commands/flags',
-              '- output: Related to output format',
-              '- filtering: Related to file filtering',
-              '- clipboard: Related to clipboard',
-              '- needs-info: Missing reproduction or details',
-              '- good-first-issue: Simple fix for newcomers'
-            ].join('\n');
-
-            const prAddition = [
-              '',
-              'Additional PR-only labels (MUST use one of these for every PR):',
-              '- bot: approved: Code looks good, simple/straightforward change',
-              '- bot: needs-review: Complex change, needs human review',
-              '',
-              'For PRs, assess the code quality and ALWAYS include either "bot: approved" or "bot: needs-review" in your labels array.'
-            ].join('\n');
-
-            const responseFormat = [
-              '',
-              'Respond with JSON only:',
-              '{',
-              '  "labels": ["bug", "cli"],',
-              '  "comment": "Optional helpful comment or null",',
-              '  "summary": "One sentence summary"',
-              '}'
-            ].join('\n');
-
-            const systemPrompt = basePrompt + (itemType === 'pr' ? prAddition : '') + responseFormat;
-
-            const userPrompt = (itemType === 'pr' ? 'Review this Pull Request' : 'Triage this Issue') + ':\n\n' +
-              '**Title:** ' + item.title + '\n\n' +
-              '**Body:**\n' + (item.body || '(No description)') + '\n\n' +
-              (itemType === 'pr' ? '**Changed Files:** Will affect the codebase\n\n' : '') +
-              'Respond with JSON only.';
-
-            // Call Claude
-            const response = await anthropic.messages.create({
-              model: 'claude-sonnet-4-5-20241022',
-              max_tokens: 500,
-              system: systemPrompt,
-              messages: [{ role: 'user', content: userPrompt }]
-            });
-
-            // Parse response
-            const content = response.content[0].text;
-            console.log('Claude response:', content);
-
-            let result;
-            try {
-              const jsonMatch = content.match(/\{[\s\S]*\}/);
-              result = JSON.parse(jsonMatch[0]);
-            } catch (e) {
-              console.error('Failed to parse:', e);
-              return;
-            }
-
-            // Apply labels
-            if (result.labels && result.labels.length > 0) {
-              await github.rest.issues.addLabels({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: itemNumber,
-                labels: result.labels
-              });
-              console.log('Applied labels:', result.labels);
-            }
-
-            // Post comment if provided
-            if (result.comment) {
-              const commentBody = itemType === 'pr'
-                ? '## 🤖 AI Review\n\n' + result.comment + '\n\n---\n*Automated review - maintainer will follow up*'
-                : '👋 ' + result.comment + '\n\n---\n*🤖 Automated triage*';
-
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: itemNumber,
-                body: commentBody
-              });
-              console.log('Posted comment');
-            }
-
-            console.log('Triage complete:', result.summary);
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          library: primeng
+          mode: ${{ github.event_name == 'issues' && 'issue' || github.event_name == 'pull_request' && 'pr' || inputs.mode }}
+          issue-number: ${{ github.event.issue.number || inputs.issue_number }}
+          pr-number: ${{ github.event.pull_request.number || inputs.pr_number }}
+          max-issues: ${{ inputs.max_issues || 5 }}
+          dry-run: ${{ inputs.dry_run || 'true' }}
