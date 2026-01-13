@@ -28,7 +28,8 @@
     "export",
     "tree",
     "files",
-    "analysis"
+    "analysis",
+    "converter"
   ],
   "author": "atkntepe",
   "engines": {
